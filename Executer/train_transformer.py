@@ -5,7 +5,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
 from Data.TextDataset import get_data_loader
-from Executer.evaluation_helper import calc_entropy_loss_batch
+from Executer.evaluation_helper import calc_entropy_loss_batch, eval_entropy_loss_batch
 from Transformer.transformer_components import TransformerConfig, Transformer
 
 train_paths = ['./assets/lovecraftcorpus/beast.txt', './assets/lovecraftcorpus/clergyman.txt', './assets/lovecraftcorpus/hound.txt']
@@ -35,7 +35,7 @@ def start_train_process():
     model = Transformer(config)
     model = model.to(device)
 
-    train(train_loader, validation_loader, model, config, num_epochs=1)
+    train(train_loader, validation_loader, model, config, num_epochs=4)
 
 
 def train(train_loader: DataLoader, validation_loader: DataLoader, model: nn.Module, config: TransformerConfig,
@@ -51,6 +51,7 @@ def train(train_loader: DataLoader, validation_loader: DataLoader, model: nn.Mod
         for input_batch, target_batch in train_loader:
             optimizer.zero_grad()
             loss = calc_entropy_loss_batch(input_batch, target_batch, model, config.device)
+            train_losses.append(loss)
 
             loss.backward()
             optimizer.step()
@@ -58,24 +59,13 @@ def train(train_loader: DataLoader, validation_loader: DataLoader, model: nn.Mod
             tokens_seen += input_batch.numel()
             global_step += 1
 
-        if global_step % eval_freq == 0:
-            model.eval()
+            if global_step % eval_freq == 0:
+                # Use the whole data loader as evaluation step
+                val_loss = eval_entropy_loss_batch(validation_loader, model, config.device)
+                val_losses.append(val_loss)
 
-            # Use the whole data loader as evaluation step
-            with torch.no_grad():
-                train_loss = calc_entropy_loss_batch(train_loader, model, device, num_batches=eval_iter)
-
-            model.train()
-
-            train_loss, val_loss = evaluate_model(model, train_loader, val_loader, device, eval_iter)
-
-            train_losses.append(train_loss)
-            val_losses.append(val_loss)
-            track_tokens_seen.append(tokens_seen)
-
-            print(f"Ep {epoch + 1} (Step {global_step:06d}): "
-                  f"Train loss {train_loss:.3f}, Val loss {val_loss:.3f}")
-
+                print(f"Ep {epoch + 1} (Step {global_step:06d}): "
+                      f"Train loss {loss:.3f}, Val loss {val_loss:.3f}")
 
 if __name__ == '__main__':
     start_train_process()

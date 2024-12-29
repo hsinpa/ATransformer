@@ -15,12 +15,15 @@ def calc_entropy_loss_batch(input_batch: torch.Tensor, target_batch: torch.Tenso
 
 def eval_entropy_loss_batch(data_loader: DataLoader, model: nn.Module, device: torch.device):
     model.eval()
+    loss_count = 0
+    loss = 0
 
     # Use the whole data loader as evaluation step
     with torch.no_grad():
-        train_loss = calc_loss_loader(train_loader, model, device, num_batches=eval_iter)
-        val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
+        for input_batch, target_batch in data_loader:
+            loss += calc_entropy_loss_batch(input_batch, target_batch, model, device)
+            loss_count += 1
 
     model.train()
 
-    return loss
+    return loss / loss_count
