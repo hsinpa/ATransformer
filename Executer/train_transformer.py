@@ -1,3 +1,5 @@
+import os
+
 import tiktoken
 import torch
 from torch import nn
@@ -10,6 +12,7 @@ from Transformer.transformer_components import TransformerConfig, Transformer
 
 train_paths = ['./assets/lovecraftcorpus/beast.txt', './assets/lovecraftcorpus/clergyman.txt', './assets/lovecraftcorpus/hound.txt']
 validation_paths = ['./assets/lovecraftcorpus/beast.txt']
+save_path = "./saves/model_and_optimizer.pth"
 
 def get_full_text_from_path(path: str):
     with open(path, 'r') as file:
@@ -22,7 +25,7 @@ def start_train_process():
 
     tokenizer = tiktoken.get_encoding("o200k_base")
 
-    batch = 16
+    batch = 32
     config = TransformerConfig(
         embed_dim=768, window_size=50, vocab_size=tokenizer.n_vocab,
         attention_head_size=8, attention_layer_size=12, hidden_dropout_prob=0.1,
@@ -34,13 +37,18 @@ def start_train_process():
                                         batch_size=batch, drop_last=False)
     model = Transformer(config)
     model = model.to(device)
-
-    train(train_loader, validation_loader, model, config, num_epochs=4)
-
-
-def train(train_loader: DataLoader, validation_loader: DataLoader, model: nn.Module, config: TransformerConfig,
-          num_epochs: int):
     optimizer: Optimizer = torch.optim.AdamW(model.parameters(), lr=0.0004, weight_decay=0.1)
+
+    if os.path.exists(save_path):
+        checkpoint = torch.load(save_path)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+    train(train_loader, validation_loader, model, optimizer, config, num_epochs=1)
+
+
+def train(train_loader: DataLoader, validation_loader: DataLoader, model: nn.Module,  optimizer: Optimizer, config: TransformerConfig,
+          num_epochs: int):
     train_losses, val_losses, track_tokens_seen = [], [], []
     tokens_seen, global_step = 0, -1
     eval_freq = 10
@@ -66,6 +74,12 @@ def train(train_loader: DataLoader, validation_loader: DataLoader, model: nn.Mod
 
                 print(f"Ep {epoch + 1} (Step {global_step:06d}): "
                       f"Train loss {loss:.3f}, Val loss {val_loss:.3f}")
+
+
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+    },save_path)
 
 if __name__ == '__main__':
     start_train_process()
